@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI4Science Korea | Live standings</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body data-view="display"><main>
+<header>
+  <div class="brand"><span class="brand-mark" aria-hidden="true">AI</span><div><strong>AI4Science Korea 2026</strong><small>NVIDIA PhysicsNeMo Tutorial · 09.30</small></div></div>
+  <div class="header-tools"><span class="pilot">PILOT · NOT OFFICIAL</span><button id="fullscreen">Full screen</button></div>
+</header>
+<section id="board-panel" aria-label="Public individual standings">
+  <div class="hero"><div><p class="eyebrow">CHALLENGE LEADERBOARD</p><h1>Individual standings</h1><p class="hero-note">Wave · Fluid · Climate · Neural Operators</p></div><div class="connection-box"><p id="connection" role="status">Connecting</p><p id="updated">Waiting for the first update.</p></div></div>
+  <p id="stale-warning" role="alert" hidden>Connection lost or delayed. Showing last received scores. Automatic paging is paused.</p>
+  <div class="stats" aria-label="Participation and judging status">
+    <div class="stat"><span>Registered</span><strong id="stat-people">-</strong></div><div class="stat"><span>Completed submissions</span><strong id="stat-completed">-</strong></div><div class="stat running"><span>Running</span><strong id="stat-running">-</strong></div><div class="stat"><span>Queued</span><strong id="stat-queued">-</strong></div>
+  </div>
+  <div class="board-card">
+    <div class="toolbar"><div><h2 id="ranking-title">Overall standings</h2><p id="ranking-description">Four Challenges · out of 400</p></div><label>Rank by <select id="ranking"><option value="overall">Overall / 400</option><option value="1">C1 · Wave / 100</option><option value="2">C2 · Fluid / 100</option><option value="3">C3 · Climate / 100</option><option value="4">C4 · Operators / 100</option></select></label></div>
+    <div class="table-scroll" role="region" aria-label="Overall and Challenge scores" tabindex="0"><table aria-label="Individual scores"><thead><tr><th scope="col">Rank</th><th scope="col">Participant alias</th><th scope="col" data-score="1">Wave<small>C1 · / 100</small></th><th scope="col" data-score="2">Fluid<small>C2 · / 100</small></th><th scope="col" data-score="3">Climate<small>C3 · / 100</small></th><th scope="col" data-score="4">Operators<small>C4 · / 100</small></th><th scope="col" data-score="overall">Total<small>/ 400</small></th></tr></thead><tbody id="standings"></tbody></table></div>
+    <div class="board-footer"><p id="range-label">Waiting for results</p><div class="pagination"><button id="previous-page" aria-label="Previous page">←</button><span id="page-label">Page 1 / 1</span><button id="next-page" aria-label="Next page">→</button><button id="rotate-pages" aria-pressed="false">Auto paging</button></div></div>
+  </div>
+  <div class="footnote"><p>Ties share a rank · A dash means no completed score · Best submission counts</p><p id="rotation-note">Next page every 15 seconds</p></div>
+  <p id="display-notice" role="status"></p>
+</section>
+</main></body></html>
