@@ -8,13 +8,14 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from ai4sci_judge.catalog import CHALLENGES
-from ai4sci_judge.expressions import SubmissionError, extract
+from ai4sci_judge.expressions import SubmissionError
+from ai4sci_judge.contracts import function_names, source_nodes as problem_source_nodes
 
 
 def submission_html(challenge, reference, judge_url=""):
     spec = CHALLENGES[str(challenge)]
     exercises = ("build_datasets, build_model and PINO's ReactionDiffusionPDE" if str(challenge) == "4"
-                 else "student_equations")
+                 else ", ".join(function_names(challenge)))
     mode = ("Instructor demonstration: these results are not your submission. Switch USE_REFERENCE to False before exporting."
             if reference else "Student practice: graphs and local errors are feedback, not a submitted score.")
     link = "The instructor has not configured a submission URL in this notebook yet. You can still export your code."
@@ -53,7 +54,7 @@ def export_submission(challenge, lesson_dir, *, levels=(1,), reference=False):
             from ai4sci_judge.operators import source_nodes
             nodes = source_nodes(source, level)
         else:
-            nodes = [extract(source)]
+            nodes = problem_source_nodes(source, challenge)
         # Validation guards may raise ValueError; unfinished exercise markers
         # must never be mistaken for a completed implementation.
         for function in nodes:
