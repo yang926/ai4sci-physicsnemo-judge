@@ -1,4 +1,4 @@
-"""Notebook hand-off to the separate Challenge 1-4 pilot submission page."""
+"""Legacy local export helpers. Student submission lives in the course notebook."""
 import ast
 from html import escape
 import json
@@ -18,16 +18,16 @@ def submission_html(challenge, reference, judge_url=""):
                  else ", ".join(function_names(challenge)))
     mode = ("Instructor demonstration: these results are not your submission. Switch USE_REFERENCE to False before exporting."
             if reference else "Student practice: graphs and local errors are feedback, not a submitted score.")
-    link = "The instructor has not configured a submission URL in this notebook yet. You can still export your code."
+    link = "If the judge connection is not configured, practice is still available. Use the updated course notebook's submission controls."
     if judge_url:
         parsed = urlsplit(judge_url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("Use the judge's plain http(s) URL, without credentials or query parameters.")
-        link = f'<a href="{escape(judge_url, quote=True)}" target="_blank" rel="noopener noreferrer">Open submission page and leaderboard</a>'
+        link = f'Judge API: <code>{escape(judge_url)}</code>. Submit and read results in the updated course notebook.'
     return (f'<section><h3>Challenge {escape(str(challenge))}: submission</h3><p><strong>{mode}</strong></p>'
             f'<p>Files: {escape(", ".join(spec["files"]))}</p>'
-            f'<p>Save your {exercises} implementation, export the Levels below, then upload the JSON on the submission page. '
-            'Exporting does not send anything. The server recalculates results; it does not read your local metrics.json.</p>'
+            f'<p>Save your {exercises} implementation, select the completed Levels in the notebook, then click Submit code. '
+            'Running a cell does not submit. The server recalculates results; it does not read your local metrics.json.</p>'
             '<p>Current server scores are a pilot, not official event points. All four Challenges are included (400 points total).</p>'
             f'<p>{link}</p></section>')
 
@@ -75,5 +75,5 @@ def export_submission(challenge, lesson_dir, *, levels=(1,), reference=False):
 
 def show_export(path):
     from IPython.display import FileLink, display
-    print("Exported only. Download this JSON, then upload it on the judge page. No score has been requested yet.")
+    print("Local backup only. Use Submit code in the updated course notebook to request evaluation.")
     display(FileLink(os.path.relpath(path, Path.cwd())))

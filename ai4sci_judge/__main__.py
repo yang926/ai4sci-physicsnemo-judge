@@ -14,7 +14,7 @@ def main():
     init.add_argument("--steps", type=int, default=200)
     init.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     add = commands.add_parser("add-participant")
-    add.add_argument("nickname")
+    add.add_argument("nickname", nargs="?", help="Optional display name; omit so the participant chooses one in Jupyter")
     serve = commands.add_parser("serve")
     serve.add_argument("--port", type=int, default=8090)
     serve.add_argument("--display-only", action="store_true", help="Read-only projector listener; denies account and submission endpoints")

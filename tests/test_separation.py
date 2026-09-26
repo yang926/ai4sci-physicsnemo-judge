@@ -44,6 +44,10 @@ def test_projector_listener_has_no_account_or_submission_routes(tmp_path):
         with pytest.raises(HTTPError) as error:
             urlopen(Request(base + "/api/submissions", data=b'{}', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"}))
         assert error.value.code == 403
+        with pytest.raises(HTTPError) as error:
+            urlopen(Request(base + "/api/me/nickname", data=b'{"nickname":"Changed"}', headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"}))
+        assert error.value.code == 403
+        assert store.authenticate(token)["nickname"] == "Display fixture"
     finally:
         server.shutdown()
         server.server_close()

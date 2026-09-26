@@ -208,6 +208,8 @@ def test_private_state_rejects_served_repository_and_shared_directory(tmp_path):
         Store.initialize(ROOT / "ETC/judge/unsafe-state")
     shared = tmp_path / "shared"
     shared.mkdir(mode=0o755)
+    # Make the fixture shared even when the service's umask is 0077.
+    shared.chmod(0o755)
     with pytest.raises(ValueError, match="private"):
         Store.initialize(shared)
     assert not (shared / "judge.sqlite3").exists()
@@ -220,7 +222,7 @@ def test_http_submission_identity_csrf_and_privacy(store):
     thread.start()
     base = f"http://127.0.0.1:{server.server_port}"
     try:
-        for route in ("/display", "/display/", "/display?ranking=4&rotate=1"):
+        for route in ("/", "/display", "/display/", "/display?ranking=4&rotate=1"):
             with urlopen(base + route) as response:
                 html = response.read().decode()
                 assert 'data-view="display"' in html
@@ -229,11 +231,26 @@ def test_http_submission_identity_csrf_and_privacy(store):
                 assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
         with urlopen(base + "/api/board") as response:
             assert json.load(response)["rules"]["status"] == "pilot_not_official"
+        with urlopen(base + "/api/board?challenge=3") as response:
+            selected = json.load(response)
+        assert selected["challenge"] == "3"
+        assert set(selected["challenges"]) == {"3"}
+        assert set(selected["participants"][0]) == {"nickname", "scores", "challenge_ranks"}
+        assert selected["participants"][0]["nickname"] == "HTTP learner"
+        for query in ("challenge=overall", "challenge=", "challenge=0", "challenge=1&challenge=2", "ranking=1"):
+            with pytest.raises(HTTPError) as error:
+                urlopen(base + "/api/board?" + query)
+            assert error.value.code == 400
         with pytest.raises(HTTPError) as error:
             urlopen(base + "/api/me")
         assert error.value.code == 401
         payload = json.dumps({"challenge": "1", "sources": {"wave_l1.py": answer("1", "wave_l1.py")}}).encode()
         headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+        for authorization in ({}, {"Authorization": "Bearer unknown"}):
+            with pytest.raises(HTTPError) as error:
+                urlopen(Request(base + "/api/submissions", data=payload, headers={"Content-Type": "application/json", **authorization}))
+            assert error.value.code == 401
+        assert store.history(identifier) == []
         with pytest.raises(HTTPError) as error:
             urlopen(Request(base + "/api/submissions", data=payload, headers={**headers, "Origin": "https://evil.example"}))
         assert error.value.code == 403
@@ -249,3 +266,41 @@ def test_http_submission_identity_csrf_and_privacy(store):
         assert store.history(identifier)[0]["score"] is None
     finally:
         server.shutdown(); server.server_close(); thread.join()
+
+
+def test_challenge_board_uses_registered_name_and_only_that_challenges_scores(store):
+    earlier_id, earlier_token = person(store, "Earlier leader")
+    current_id, current_token = person(store, "Current leader")
+    person(store, "No submissions yet")
+    for identifier, challenge, filename, score in (
+        (earlier_id, "1", "wave_l1.py", 100),
+        (earlier_id, "2", "chip_2d_l1.py", 100),
+        (earlier_id, "3", "climate_l1.py", 10),
+        (current_id, "3", "climate_l1.py", 90),
+    ):
+        store.submit(identifier, challenge, {filename: answer(challenge, filename)}, cooldown=0)
+        job = store.claim()
+        store.finish(job, completed(job, score))
+    store.submit(earlier_id, "1", {"wave_l1.py": answer("1", "wave_l1.py") + "\n# revised"}, cooldown=0)
+    selected = store.board(challenge="3")
+    assert selected["challenge"] == "3"
+    assert set(selected["challenges"]) == {"3"}
+    assert selected["queue"] == {"completed": 2}
+    assert "overall_max" not in selected["rules"]
+    rows = selected["participants"]
+    assert [row["nickname"] for row in rows] == ["Current leader", "Earlier leader", "No submissions yet"]
+    assert [row["challenge_ranks"]["3"] for row in rows] == [1, 2, None]
+    assert [row["scores"]["3"] for row in rows] == [90, 10, None]
+    for row in rows:
+        assert set(row) == {"nickname", "scores", "challenge_ranks"}
+        assert set(row["scores"]) == set(row["challenge_ranks"]) == {"3"}
+    assert rows[0]["nickname"] == store.authenticate(current_token)["nickname"]
+    assert rows[1]["nickname"] == store.authenticate(earlier_token)["nickname"]
+    # Historical scores and overall totals stay available internally, unchanged.
+    complete = store.board()
+    assert complete["participants"][0]["nickname"] == "Earlier leader"
+    assert complete["participants"][0]["total"] == 210
+    assert complete["queue"] == {"completed": 4, "queued": 1}
+    assert store.board(challenge="1")["queue"] == {"completed": 1, "queued": 1}
+    with pytest.raises(ValueError):
+        store.board(challenge="overall")

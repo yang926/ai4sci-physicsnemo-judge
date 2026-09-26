@@ -2,10 +2,10 @@
 const $ = id => document.getElementById(id);
 const isDisplay = document.body.dataset.view === "display";
 const query = new URLSearchParams(location.search);
-const rankingKeys = ["overall", "1", "2", "3", "4"];
+const rankingKeys = ["1", "2", "3", "4"];
 const rotationMs = 15000;
 let board = null, page = 0, pageCount = 1, lastSuccess = 0;
-let fetchingBoard = false, connectionFailed = false, mineRequest = 0;
+let fetchingBoard = false, connectionFailed = false;
 let autoRotate = query.has("rotate") ? query.get("rotate") === "1" : isDisplay && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 let nextRotation = Date.now() + rotationMs;
 if (rankingKeys.includes(query.get("ranking"))) $("ranking").value = query.get("ranking");
@@ -39,10 +39,27 @@ function rememberView() {
   url.searchParams.set("rotate", autoRotate ? "1" : "0");
   history.replaceState(null, "", url);
 }
-function drawBoard() {
-  if (!board) return;
+function showLoading() {
   const key = $("ranking").value;
-  const rank = row => key === "overall" ? row.rank : row.challenge_ranks[key];
+  board = null; page = 0; pageCount = 1; lastSuccess = 0; connectionFailed = false;
+  $("challenge-title").textContent = `Challenge ${key}`;
+  $("ranking-title").textContent = `Challenge ${key} standings`;
+  $("ranking-description").textContent = "Best submission in this Challenge";
+  $("score-heading").textContent = `C${key} score`;
+  const tr = document.createElement("tr"), td = document.createElement("td");
+  td.colSpan = 3; td.className = "empty";
+  td.textContent = `Waiting for Challenge ${key} results...`;
+  tr.append(td); $("standings").replaceChildren(tr);
+  for (const status of ["people", "completed", "running", "queued"]) $("stat-" + status).textContent = "-";
+  $("page-label").textContent = "Page 1 / 1";
+  $("range-label").textContent = "Waiting for results";
+  $("previous-page").disabled = true; $("next-page").disabled = true;
+  updateConnection();
+}
+function drawBoard() {
+  const key = $("ranking").value;
+  if (!board || board.challenge !== key) return;
+  const rank = row => row.challenge_ranks[key];
   const rows = [...board.participants].sort((a, b) => (rank(a) ?? Infinity) - (rank(b) ?? Infinity) || a.nickname.localeCompare(b.nickname, "en"));
   const size = rowsPerPage();
   pageCount = Math.max(1, Math.ceil(rows.length / size));
@@ -54,47 +71,42 @@ function drawBoard() {
     const position = rank(row);
     if (position === null) tr.classList.add("unranked");
     else if (position <= 3) tr.classList.add("leading");
-    const values = [position ?? "-", row.nickname, ...Object.keys(board.challenges).map(id => format(row.scores[id])), row.rank === null ? "-" : format(row.total)];
+    const values = [position ?? "-", row.nickname, format(row.scores[key])];
     values.forEach((value, index) => {
       const td = document.createElement("td");
       if (index === 0) {
         const badge = document.createElement("span"); badge.className = "rank"; badge.textContent = value; td.append(badge);
       } else { td.textContent = value; }
       if (index === 1) td.title = row.nickname;
-      const scoreKey = index === values.length - 1 ? "overall" : Object.keys(board.challenges)[index - 2];
-      if (index >= 2 && scoreKey === key) td.classList.add("score-active");
+      if (index === 2) td.classList.add("score-active");
       tr.append(td);
     });
     fragment.append(tr);
   }
   if (!rows.length) {
     const tr = document.createElement("tr"), td = document.createElement("td");
-    td.colSpan = Object.keys(board.challenges).length + 3; td.className = "empty";
+    td.colSpan = 3; td.className = "empty";
     td.textContent = "No participants registered yet. Standings will appear after registration.";
     tr.append(td); fragment.append(tr);
   }
   $("standings").replaceChildren(fragment);
-  document.querySelectorAll("th[data-score]").forEach(th => th.classList.toggle("score-active", th.dataset.score === key));
-  $("ranking-title").textContent = key === "overall" ? "Overall standings" : `Challenge ${key} · ${board.challenges[key].title}`;
-  $("ranking-description").textContent = key === "overall" ? `Four Challenges · out of ${board.rules.overall_max}` : `Best submission in this Challenge · out of ${board.rules.challenge_max}`;
+  $("challenge-title").textContent = `Challenge ${key} · ${board.challenges[key].title}`;
+  $("ranking-title").textContent = `Challenge ${key} standings`;
+  $("ranking-description").textContent = `Best submission in this Challenge · out of ${board.rules.challenge_max}`;
+  $("score-heading").textContent = `C${key} score`;
   $("stat-people").textContent = rows.length;
   for (const status of ["completed", "running", "queued"]) $("stat-" + status).textContent = board.queue[status] || 0;
   $("page-label").textContent = `Page ${page + 1} / ${pageCount}`;
   $("range-label").textContent = rows.length ? `Participants ${start + 1}–${Math.min(start + size, rows.length)} of ${rows.length}` : "Waiting for registration";
   $("previous-page").disabled = page === 0;
   $("next-page").disabled = page === pageCount - 1;
-  if (!isDisplay) {
-    $("rules").textContent = `${board.rules.description} Fixed training: ${board.rules.steps} steps, seed ${board.rules.seed}. Provisional error scale: ${board.rules.quality_error_scale}.`;
-    $("revision").textContent = `Scoring version: ${board.rules.rubric} · ${board.fingerprint.slice(0, 12)}`;
-    expectedFiles();
-  }
   updateRotation();
 }
 function updateConnection() {
   const disconnected = stale();
   const changed = $("stale-warning").hidden === disconnected;
   document.body.dataset.connection = disconnected ? "stale" : lastSuccess ? "live" : "waiting";
-  const message = disconnected ? "Connection delayed · last received scores" : lastSuccess ? "Connected · updates every 5 seconds" : "Connecting";
+  const message = disconnected ? (lastSuccess ? "Connection delayed · last received scores" : "Connection delayed · waiting for this Challenge") : lastSuccess ? "Connected · updates every 5 seconds" : "Connecting";
   // Do not repeatedly announce an unchanged live region to screen readers.
   if ($("connection").textContent !== message) $("connection").textContent = message;
   $("stale-warning").hidden = !disconnected;
@@ -110,22 +122,28 @@ function updateRotation() {
 async function refreshBoard() {
   if (fetchingBoard) return;
   fetchingBoard = true;
+  const key = $("ranking").value;
   try {
-    const next = await api("/api/board");
-    if (!Array.isArray(next.participants) || !next.challenges || !next.rules || !next.queue) throw new Error("Invalid board response");
+    const next = await api(`/api/board?challenge=${encodeURIComponent(key)}`);
+    if (key !== $("ranking").value) return;
+    if (next.challenge !== key || !Array.isArray(next.participants) || !next.challenges?.[key] || !next.rules || !next.queue) throw new Error("Invalid board response");
     board = next;
     if (stale()) nextRotation = Date.now() + rotationMs;
     lastSuccess = Date.now(); connectionFailed = false;
     drawBoard();
-  } catch (_) { connectionFailed = true; }
-  finally { fetchingBoard = false; updateConnection(); }
+  } catch (_) { if (key === $("ranking").value) connectionFailed = true; }
+  finally {
+    fetchingBoard = false;
+    if (key !== $("ranking").value) refreshBoard();
+    else updateConnection();
+  }
 }
 function changePage(delta) {
   page = Math.max(0, Math.min(pageCount - 1, page + delta));
   nextRotation = Date.now() + rotationMs;
   drawBoard();
 }
-$("ranking").addEventListener("change", () => { page = 0; nextRotation = Date.now() + rotationMs; rememberView(); drawBoard(); });
+$("ranking").addEventListener("change", () => { nextRotation = Date.now() + rotationMs; rememberView(); showLoading(); refreshBoard(); });
 $("previous-page").addEventListener("click", () => changePage(-1));
 $("next-page").addEventListener("click", () => changePage(1));
 $("rotate-pages").addEventListener("click", () => { autoRotate = !autoRotate; nextRotation = Date.now() + rotationMs; rememberView(); updateRotation(); });
@@ -147,62 +165,8 @@ if (isDisplay) {
     if (event.target.closest("button, select, input, a") || event.altKey || event.ctrlKey || event.metaKey) return;
     if (["ArrowLeft", "ArrowRight"].includes(event.key)) { event.preventDefault(); changePage(event.key === "ArrowRight" ? 1 : -1); }
   });
-} else {
-  installSubmission();
 }
-function expectedFiles() {
-  if (board && !isDisplay) $("expected-files").textContent = "Files: " + board.challenges[$("challenge").value].files.join(", ");
-}
-async function refreshMine() {
-  const token = $("token").value.trim(), request = ++mineRequest;
-  const data = await api("/api/me", {headers: {Authorization: `Bearer ${token}`}});
-  if (request !== mineRequest || token !== $("token").value.trim()) return;
-  $("my-heading").textContent = `${data.nickname} · My submissions`;
-  $("history").replaceChildren();
-  const statuses = {queued: "Queued", running: "Running", completed: "Completed", time_limit: "Time limit", system_error: "Server error"};
-  for (const item of data.submissions) {
-    const details = document.createElement("details"), summary = document.createElement("summary"), text = document.createElement("pre");
-    summary.textContent = `Challenge ${item.challenge} · ${statuses[item.status] || item.status} · ${item.score === null ? "Not scored" : format(item.score) + " / 100"} · ${new Date(item.created * 1000).toLocaleString("en-GB")}`;
-    text.textContent = JSON.stringify({submission_id:item.id, source_hash:item.source_hash, result:item.result, error:item.error}, null, 2);
-    details.append(summary, text); $("history").append(details);
-  }
-  if (!data.submissions.length) $("history").textContent = "No submissions yet.";
-}
-function installSubmission() {
-  $("token").addEventListener("input", () => { mineRequest++; $("history").replaceChildren(); $("my-heading").textContent = "My submissions"; $("submission-status").textContent = ""; });
-  $("submission-form").addEventListener("submit", async event => {
-    event.preventDefault(); $("submit-button").disabled = true;
-    let accepted = false;
-    try {
-      const files = [...$("files").files];
-      if (!files.length) throw new Error("Choose saved .py files or one exported JSON file.");
-      if (files.some(file => file.size > 1024 * 1024)) throw new Error("A selected file exceeds 1 MiB.");
-      let payload = {challenge:$("challenge").value, sources:{}};
-      if (files.length === 1 && files[0].name.endsWith(".json")) {
-        payload = JSON.parse(await files[0].text());
-        if (payload.challenge !== $("challenge").value) throw new Error("Select the Challenge matching the exported file.");
-      } else {
-        for (const file of files) {
-          if (Object.hasOwn(payload.sources, file.name)) throw new Error("Duplicate filename.");
-          payload.sources[file.name] = await file.text();
-        }
-      }
-      const result = await api("/api/submissions", {method:"POST", headers:{Authorization:`Bearer ${$("token").value.trim()}`, "Content-Type":"application/json"}, body:JSON.stringify(payload)});
-      accepted = true;
-      $("submission-status").textContent = `Accepted: ${result.submission_id}. Waiting for evaluation; this is not a score yet.`;
-      await refreshMine(); await refreshBoard();
-    } catch (error) {
-      $("submission-status").textContent = (accepted ? "Submission accepted. Could not refresh history: " : "") + error.message;
-    } finally { $("submit-button").disabled = false; }
-  });
-  $("refresh-mine").addEventListener("click", () => refreshMine().catch(error => { $("submission-status").textContent = error.message; }));
-  $("challenge").addEventListener("change", expectedFiles);
-  for (const view of ["board", "submit"]) $(view + "-tab").addEventListener("click", () => {
-    for (const other of ["board", "submit"]) { $(other + "-panel").hidden = other !== view; $(other + "-tab").setAttribute("aria-pressed", String(other === view)); }
-    if (view === "board") drawBoard();
-  });
-}
-updateRotation();
+showLoading();
 refreshBoard();
 setInterval(() => {
   updateConnection();
@@ -212,5 +176,4 @@ setInterval(() => {
 setInterval(async () => {
   if (document.hidden) return;
   await refreshBoard();
-  if (!isDisplay && !$("submit-panel").hidden && $("token").value.trim()) await refreshMine().catch(error => { $("submission-status").textContent = error.message; });
 }, 5000);

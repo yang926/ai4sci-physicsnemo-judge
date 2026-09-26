@@ -2,7 +2,7 @@
 
 This is a local development system for this course, not a deployed event service.
 It accepts individual submissions, queues fixed-budget evaluations and displays
-per-Challenge and overall standings. All eleven Levels are included: Wave,
+standings for the selected Challenge. All eleven Levels are included: Wave,
 Fluid, Climate, and Neural Operators (FNO, AFNO and PINO).
 
 ## Start locally
@@ -13,11 +13,17 @@ directory. The following path is an example private directory, not a URL.
 
 ```bash
 python -m ai4sci_judge --state /srv/ai4sci-judge-state init --steps 2 --device cpu
-python -m ai4sci_judge --state /srv/ai4sci-judge-state add-participant instructor-test
+python -m ai4sci_judge --state /srv/ai4sci-judge-state add-participant
 ```
 
 The second command prints a randomly generated participant access code once.
-Give each participant their own code privately. It is not a Brev credential.
+Provision each personal code privately into its workspace, outside the course and Jupyter root. It is not a Brev credential.
+Without an optional name, `add-participant` creates an unnamed private account.
+The student enters **Nickname** and clicks **Register nickname** in the notebook
+submission panel. No random public nickname is assigned. The name is saved to
+the authenticated account and reused in all four Challenges and the scoreboard.
+Brev account names are not fetched automatically. Without a valid personal
+credential, submission is rejected, not recorded anonymously.
 Only its hash is stored in the database. Do not put codes in URLs, notebooks,
 Git, screenshots or shell command arguments.
 
@@ -31,21 +37,24 @@ python -m ai4sci_judge --state /srv/ai4sci-judge-state worker --device cpu
 The page is at `http://127.0.0.1:8090/` **on the computer running the server**.
 To use it on a Mac connected to another computer, forward remote port 8090 to
 Mac port 8090 first, just as for Jupyter's port 8888. No forward is created by
-these commands. Set `JUDGE_URL` in the notebook to the browser-accessible URL.
+these commands. The notebook API URL must be reachable from its Python kernel; the Mac display URL is not the student API address.
 Do not expose the local development HTTP server to the public internet.
 
-## Projector and student screens
+## Projector and notebook
 
-Use **`/display` for the projector**, not the student submission screen at `/`.
-For the example port above, open `http://127.0.0.1:8090/display` on the host,
-or on the Mac after forwarding port 8090. The student page also has a
-"Projector view" link that opens a separate window without access to its opener.
-These are local addresses, not deployed event links.
+Both `/` and `/display` show the read-only scoreboard. There is no web upload
+form. For the example port above, open `http://127.0.0.1:8090/display` on the
+host or on the Mac after forwarding port 8090. These are local addresses, not
+deployed event links. Students submit and read their personal results inside
+the Challenge notebook, using a privately configured workspace credential.
 
-The projector page has large, high-contrast text, a full-screen button, overall
-and Challenge 1-4 selectors, and registration/queue counts. It requests only
-the public board API. It has no login form, access code, source upload, or
-personal submission history. Only participant aliases and public scores appear.
+The projector page shows three columns: rank, registered participant name and
+score for the current Challenge. It opens on Challenge 1; the instructor selects
+Challenges 1-4. Earlier scores and the overall total are not shown. Queue counts
+are for the selected Challenge; the registered count covers all participants.
+Large, high-contrast text and a full-screen button support projection. The page
+requests only the selected Challenge from the public board API. It has no login
+form, access code, source upload, or personal submission history.
 Use suitable public aliases when issuing accounts; do not register email
 addresses or other private information as nicknames.
 
@@ -57,12 +66,14 @@ ranks; zero is distinct from an ungraded dash. All 110 participants are reachabl
 through the pages, including participants without a completed score.
 
 `/display?ranking=4&rotate=0` opens Challenge 4 with automatic paging paused.
-Choose `ranking=overall` or `1` through `4`, and `rotate=1` to enable paging.
+Choose `ranking=1` through `4`, and `rotate=1` to enable paging. Old overall
+bookmarks fall back to Challenge 1. All scores and totals remain on the server.
 The URL saves only these public display settings, never an access code.
 
 A lost connection keeps the last received scores, shows a warning and receipt
 time, and pauses automatic paging until connection recovery. "Completed submissions"
-counts completed submissions, not distinct participants. No fictitious scores
+counts completed submissions for this Challenge, not distinct participants.
+Switching Challenges clears the old scores until the new results arrive. No fictitious scores
 are inserted by the application, and the **NOT OFFICIAL** label remains visible
 until a separately reviewed event rubric is implemented.
 
@@ -79,12 +90,18 @@ a fresh v3 state so earlier PDE-only scores are not mixed with complete-task sco
    equations/speed/conditions for Wave; equations/conditions/geometry for Fluid;
    equations/parameters/conditions/analytic solutions for Climate; dataset/model
    functions and PINO physics for Operators. See [the task mapping](../course/ETC/course_materials/CHALLENGE_CONTRACTS.md).
-2. At the end of the notebook, choose `SUBMISSION_LEVELS` and enable
-   `EXPORT_SUBMISSION`. Download the resulting JSON. This does not submit it.
-3. Open the judge page, enter your participant access code, select the matching
-   Challenge and upload the JSON. Saved lesson `.py` files are also accepted.
-4. Check **My submissions** for queued, running, completed, time-limit or server
-   error status. Inspect per-Level feedback after evaluation.
+2. Run the final notebook cell. Before the first submission, enter **Nickname**
+   and click **Register nickname**. Names must be unique and contain 1-40 visible
+   characters. The same name is reused across all four Challenges. Select the
+   completed Levels. Running this cell or Run All does not register or submit.
+3. Click **Submit code**. The notebook sends saved exercise functions directly
+   to the judge API; there is no separate login or website upload.
+4. Read queue status, points and evaluation details in the same panel. Pending
+   jobs refresh every five seconds. Use **Refresh results** to check again.
+
+**Save nickname** can correct a name without changing the account or its scores.
+An unnamed account cannot submit and is not shown on the public scoreboard.
+The projector has no nickname or account-editing controls.
 
 The server uses the authenticated participant identity, never a name supplied
 inside the uploaded file. A submission is one immutable source snapshot.
@@ -138,8 +155,10 @@ subprocess commands would require a new isolation design.
 
 ## Provisional scoring
 
-Rules live in [catalog.py](../ai4sci_judge/catalog.py); the board shows the active version,
-training budget and source/configuration fingerprint.
+Rules live in [catalog.py](../ai4sci_judge/catalog.py). The board API includes the
+active rubric and source/configuration fingerprint; the simple projector page
+shows only the selected Challenge standings and queue counts. Inspect the private
+state settings for the fixed numerical-feedback budget.
 
 Each Level has 100 pilot points:
 
@@ -242,8 +261,8 @@ capacity, production security, or a public event deployment.
 
 Local verification on 2026-09-23 also executed all four modified notebooks as
 separate reference-mode copies, including their plots and submission panels.
-Chromium checks covered board loading, authenticated notebook-JSON upload,
-queued status and a 390px mobile layout without JavaScript exceptions.
+Those checks covered the earlier upload UI. The current workflow replaces it
+with notebook controls; browser regressions now require a display-only root.
 Existing learner notebook outputs were preserved, not cleared or certified.
 
 Optional real-browser regression tests (requires Chromium and websocket-client):
@@ -255,7 +274,7 @@ AI4SCI_TEST_CHROMIUM=/absolute/path/to/chrome python -m pytest tests/test_judge_
 These use disposable private state and synthetic 110-person data, never event
 results. They check 1920x1080/1366x768 projection layouts, narrow-screen overflow,
 pagination, joint ranks, zero/empty states, loss and recovery of connection,
-public-page privacy, unsafe nickname escaping, and authenticated student upload.
+public-page privacy, unsafe nickname escaping, and the absence of upload/login controls.
 Without the browser executable setting the optional tests are skipped.
 The page uses local system fonts, including Apple SD Gothic Neo and Malgun
 Gothic fallbacks. A Linux screenshot host needs an installed Korean font; it

@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import time
 import uuid
+import unicodedata
 
 from .catalog import CHALLENGES, ROOT, PROJECT_ROOT, fingerprint, rules
 from .expressions import SubmissionError
@@ -15,6 +16,53 @@ from .expressions import SubmissionError
 
 class BusyError(ValueError):
     pass
+
+
+class NicknameConflict(ValueError):
+    pass
+
+
+class NicknameRequired(ValueError):
+    pass
+
+
+def clean_nickname(value):
+    if not isinstance(value, str) or not value.isprintable():
+        raise ValueError("Use a nickname with 1 to 40 visible characters.")
+    name = " ".join(unicodedata.normalize("NFKC", value).split())
+    if not 1 <= len(name) <= 40:
+        raise ValueError("Use a nickname with 1 to 40 visible characters.")
+    return name
+
+
+def require_available_nickname(db, nickname, participant=None):
+    key = nickname.casefold()
+    for row in db.execute("SELECT id,nickname FROM participants WHERE nickname IS NOT NULL"):
+        if row["id"] != participant and clean_nickname(row["nickname"]).casefold() == key:
+            raise NicknameConflict("That nickname is already in use. Choose another nickname.")
+
+
+def challenge_board(payload, challenge):
+    """Project only one Challenge's scores, ranks and queue counts for the screen."""
+    if challenge not in CHALLENGES:
+        raise ValueError("Choose Challenge 1, 2, 3 or 4.")
+    participants = [
+        {"nickname": row["nickname"], "scores": {challenge: row["scores"][challenge]},
+         "challenge_ranks": {challenge: row["challenge_ranks"][challenge]}}
+        for row in payload["participants"]
+    ]
+    participants.sort(key=lambda row: (
+        row["challenge_ranks"][challenge] if row["challenge_ranks"][challenge] is not None else float("inf"),
+        row["nickname"],
+    ))
+    return {
+        "challenge": challenge,
+        "participants": participants,
+        "queue": payload["queue_by_challenge"].get(challenge, {}),
+        "rules": {key: payload["rules"][key] for key in ("status", "rubric", "challenge_max")},
+        "fingerprint": payload["fingerprint"],
+        "challenges": {challenge: payload["challenges"][challenge]},
+    }
 
 
 class Store:
@@ -54,7 +102,7 @@ class Store:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
                 CREATE TABLE settings (value TEXT NOT NULL, fingerprint TEXT NOT NULL);
-                CREATE TABLE participants (id TEXT PRIMARY KEY, nickname TEXT UNIQUE NOT NULL, token_hash TEXT UNIQUE NOT NULL);
+                CREATE TABLE participants (id TEXT PRIMARY KEY, nickname TEXT UNIQUE, token_hash TEXT UNIQUE NOT NULL);
                 CREATE TABLE submissions (
                     id TEXT PRIMARY KEY, participant TEXT NOT NULL, challenge TEXT NOT NULL,
                     source_hash TEXT NOT NULL, sources TEXT NOT NULL, status TEXT NOT NULL,
@@ -77,14 +125,28 @@ class Store:
             raise ValueError("Judge code or configuration changed. Start a new pilot state; do not mix scoring versions.")
         return settings, revision
 
-    def add_participant(self, nickname):
-        if not isinstance(nickname, str) or not 1 <= len(nickname.strip()) <= 40 or any(ord(c) < 32 for c in nickname):
-            raise ValueError("Nickname must contain 1 to 40 printable characters.")
+    def add_participant(self, nickname=None):
+        # The private account is provisioned first; its owner chooses a public name in Jupyter.
+        nickname = clean_nickname(nickname) if nickname is not None else None
         token = secrets.token_urlsafe(32)
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if nickname is not None:
+                require_available_nickname(db, nickname)
             db.execute("INSERT INTO participants VALUES (?, ?, ?)",
-                       (uuid.uuid4().hex, nickname.strip(), hashlib.sha256(token.encode()).hexdigest()))
+                       (uuid.uuid4().hex, nickname, hashlib.sha256(token.encode()).hexdigest()))
         return token
+
+    def set_nickname(self, participant, nickname):
+        nickname = clean_nickname(nickname)
+        self.require_current_version()
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not db.execute("SELECT id FROM participants WHERE id=?", (participant,)).fetchone():
+                raise ValueError("Unknown participant")
+            require_available_nickname(db, nickname, participant)
+            db.execute("UPDATE participants SET nickname=? WHERE id=?", (nickname, participant))
+        return nickname
 
     def authenticate(self, token):
         if not isinstance(token, str) or not 20 <= len(token) <= 200:
@@ -114,8 +176,11 @@ class Store:
         now, identifier = time.time(), uuid.uuid4().hex
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            if not db.execute("SELECT id FROM participants WHERE id=?", (participant,)).fetchone():
+            person = db.execute("SELECT id,nickname FROM participants WHERE id=?", (participant,)).fetchone()
+            if not person:
                 raise ValueError("Unknown participant")
+            if person["nickname"] is None:
+                raise NicknameRequired("Register your nickname in the notebook before submitting.")
             duplicate = db.execute("SELECT id FROM submissions WHERE participant=? AND challenge=? AND source_hash=? AND status IN ('queued','running','completed')",
                                    (participant, challenge, digest)).fetchone()
             if duplicate:
@@ -165,12 +230,17 @@ class Store:
             rows = db.execute("SELECT id,challenge,source_hash,status,created,score,result,error FROM submissions WHERE participant=? ORDER BY created DESC LIMIT 100", (participant,)).fetchall()
         return [{**dict(row), "result": json.loads(row["result"]) if row["result"] else None} for row in rows]
 
-    def board(self):
+    def board(self, challenge=None):
+        if challenge is not None and challenge not in CHALLENGES:
+            raise ValueError("Choose Challenge 1, 2, 3 or 4.")
         settings, revision = self.settings()
         with self.connect() as db:
-            participants = db.execute("SELECT id,nickname FROM participants").fetchall()
+            participants = db.execute("SELECT id,nickname FROM participants WHERE nickname IS NOT NULL").fetchall()
             rows = db.execute("SELECT participant,challenge,MAX(score) AS score FROM submissions WHERE status='completed' GROUP BY participant,challenge").fetchall()
             counts = {row[0]: row[1] for row in db.execute("SELECT status,COUNT(*) FROM submissions GROUP BY status")}
+            queues = {key: {} for key in CHALLENGES}
+            for key, status, count in db.execute("SELECT challenge,status,COUNT(*) FROM submissions GROUP BY challenge,status"):
+                queues[key][status] = count
         best = {(row["participant"], row["challenge"]): row["score"] for row in rows}
         board = []
         for person in participants:
@@ -192,5 +262,6 @@ class Store:
                 else:
                     row["challenge_ranks"][key] = rank
                 previous = value(row)
-        return {"rules": settings, "fingerprint": revision, "participants": board, "queue": counts,
-                "challenges": CHALLENGES}
+        payload = {"rules": settings, "fingerprint": revision, "participants": board, "queue": counts,
+                   "queue_by_challenge": queues, "challenges": CHALLENGES}
+        return challenge_board(payload, challenge) if challenge is not None else payload

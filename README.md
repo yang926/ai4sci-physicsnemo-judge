@@ -9,7 +9,7 @@ over the internet. GitHub hosts the source, not the running judge.
 
 ## What runs where
 
-- Students practice in their own Brev GPU workspaces and export exercise code.
+- Students practice and submit saved exercise code from their Challenge notebooks.
 - One administrator-owned GPU host stores accounts, the queue and results,
   and runs one evaluation worker per GPU.
 - The instructor's Mac only opens a read-only scoreboard through an SSH tunnel.
@@ -25,14 +25,15 @@ git clone --recurse-submodules https://github.com/yang926/ai4sci-physicsnemo-jud
 cd ai4sci-physicsnemo-judge
 ```
 
-The `course` submodule pins the teaching implementation to commit
-`101b443ffc134378f3a3602ccdc0b9eae77edc93`. It is the trusted evaluation input,
-not a place to upload student code. Updating it requires a fresh scoring state.
+The `course` submodule pins the teaching implementation to the commit recorded
+in this judge release. Check it with `git submodule status course`. It is the
+trusted evaluation input, not a place to upload student code. Updating it
+requires a fresh scoring state.
 An explicit `AI4SCI_COURSE_ROOT` can select another instructor-approved checkout;
 its actual source files are fingerprinted so old/new scores are not mixed.
 
 Use the course's Python 3.12 / PhysicsNeMo 2.2.2 environment, following
-[its setup guide](https://github.com/yang926/AI4Sci-PhysicsNeMo-Bootcamp/blob/101b443ffc134378f3a3602ccdc0b9eae77edc93/ETC/environment/SETUP.md).
+[its setup guide](course/ETC/environment/SETUP.md).
 The lightweight package metadata does **not** install CUDA or the complete
 scientific stack. Run from this checkout in the activated course environment:
 
@@ -51,17 +52,21 @@ Jupyter's served directory. The example uses a sibling directory:
 ```bash
 export AI4SCI_JUDGE_STATE="$PWD/../ai4sci-private-state"
 python -m ai4sci_judge --state "$AI4SCI_JUDGE_STATE" init --steps 2 --device cpu
-python -m ai4sci_judge --state "$AI4SCI_JUDGE_STATE" add-participant participant-001
+python -m ai4sci_judge --state "$AI4SCI_JUDGE_STATE" add-participant
 ```
 
-The account command prints a random access code once. Deliver it privately to
-that participant. Do not put it in GitHub, shared notebooks, screenshots, URLs,
-or chat. Only a hash is stored. A Brev login and a judge account are separate.
+The account command creates an unnamed private account and prints its random
+personal credential once. It does not assign a random nickname. The participant
+chooses a nickname in Jupyter before submitting. Provision it
+privately into that participant's workspace, outside the teaching checkout and
+Jupyter's served directory. Do not put it in GitHub, notebook cells, screenshots,
+URLs or chat. Only a hash is stored. Brev-to-judge identity provisioning is not
+automatic yet; one shared Launchable credential is never acceptable.
 
 Use separate terminals with the same environment and state directory:
 
 ```bash
-# Local submission page and API. Future student HTTPS ingress must be reviewed.
+# Local notebook submission API. Event HTTPS ingress is still deployment work.
 python -m ai4sci_judge --state "$AI4SCI_JUDGE_STATE" serve --port 8090
 
 # Read-only listener for the instructor's tunnel. No submission/account routes.
@@ -71,25 +76,39 @@ python -m ai4sci_judge --state "$AI4SCI_JUDGE_STATE" serve --port 8091 --display
 python -m ai4sci_judge --state "$AI4SCI_JUDGE_STATE" worker --device cpu
 ```
 
-The local submission page is `http://127.0.0.1:8090/`.
+The notebook API listens at `http://127.0.0.1:8090` for local rehearsal.
+Both `/` and `/display` show standings only; there is no web upload form.
 The read-only projector page is `http://127.0.0.1:8091/display`.
 These addresses refer to the computer running the browser. To view the remote
 server from a Mac, establish the tunnel in [connections.md](docs/connections.md).
 No tunnel or Brev instance is created by this repository.
 
-The display shows overall and per-Challenge standings, updates every five
-seconds and supports full screen and automatic paging for 110 participants.
+The display shows only the current Challenge: rank, participant name and score.
+It opens on Challenge 1; the instructor selects Challenges 1-4. Earlier scores
+and the overall total are not shown. It updates every five seconds and supports
+full screen and automatic paging for 110 participants.
 Disconnected displays retain the last received results with a visible warning.
+All Challenge scores and the pilot total remain stored on the server.
 The pilot total is 400, not an approved event rubric.
 
 ## Student submission
 
-The teaching notebook exports a JSON file with `challenge` and `sources`, or
-students can select saved exercise `.py` files on the submission page. The server
-uses the authenticated account, never a user-supplied identity in the JSON.
+In the **Submit your code** section of any Challenge notebook, the participant
+enters a **Nickname** and clicks **Register nickname**. The authenticated profile
+endpoint saves it to that participant only; the same name is reused in all four
+Challenges and the public scoreboard. Names are unique, 1-40 visible characters.
+**Save nickname** can correct a name without losing earlier submissions or points.
+The API rejects submissions from unnamed accounts. Run All never registers names.
+
+The updated teaching notebooks collect the required functions from saved `.py`
+files when the student clicks **Submit code**. The kernel sends `challenge` and
+`sources` to `POST /api/submissions`, then reads `GET /api/me` for queue status,
+points and evaluation details. Running cells never submits automatically. No
+separate website login or file upload is part of the student workflow. The server
+uses the authenticated workspace credential, never a supplied name in the JSON.
 Datasets, checkpoints, API keys and local `metrics.json` are not submissions.
 
-The browser needs a reachable, reviewed HTTPS submission URL for the real event.
+The student's instance needs a reachable, reviewed HTTPS API URL for the event.
 That ingress is **not implemented or deployed yet**. Do not give students admin
 SSH access or the instructor's localhost address as a workaround.
 
@@ -99,23 +118,32 @@ SSH access or the instructor's localhost address as a workaround.
 python -m pytest tests -q
 # Optional browser suite; requires Chromium and websocket-client:
 AI4SCI_TEST_CHROMIUM=/absolute/path/to/chrome python -m pytest tests/test_judge_projector.py -q
+# Optional compatibility override (the pinned course bridge runs in the full suite):
+AI4SCI_NOTEBOOK_ROOT=/absolute/path/to/updated-course python -m pytest tests/test_notebook_bridge.py -q
 ```
 
 The CPU training tests run completed fixtures through all eleven Levels without
-editing lesson files. Browser tests use disposable state and synthetic people.
+editing lesson files. The required cross-repository rehearsal registers one notebook
+nickname, submits all eleven Levels as that account, reads personal results,
+and verifies the separate service's Challenge-only display responses. Browser
+tests use disposable state and synthetic people.
 GPU timing, eight-worker capacity, 110-person load and production isolation still
 need rehearsal on the selected Brev hardware.
 
-Extraction verification on 2026-09-23: 66 core tests passed, including all eleven
-Levels through CPU worker subprocesses. The five optional Chromium checks also
-passed. Package build checks confirmed all four UI assets are included.
+The test suite includes all eleven Levels through CPU worker subprocesses.
+Optional Chromium checks cover the read-only standings at `/` and `/display`.
+The course's `ETC/tests/test_notebook_submission.py` covers the notebook client
+and controls. A release must pin a course with a compatible notebook client;
+the bridge fails instead of skipping when that integration is missing. The
+submodule is not automatically updated by changes to the student-facing UI.
 
 ## Repository boundary
 
 This repository contains only application code, tests and documentation. Keep
 rosters, credentials, databases, submitted code and private evaluation logs out
-of Git. The original teaching checkout remains unchanged; its earlier embedded
-judge is retained for compatibility. Use this repository for further judge work.
+of Git. Student notebook controls live in the teaching repository; its earlier
+embedded judge is retained for compatibility and local tests. Use this repository
+for judge deployment. The pinned scoring submodule is unchanged by UI edits.
 
 Source was extracted from the teaching repository's local judge on 2026-09-23;
 the separate package, explicit course dependency and read-only listener were

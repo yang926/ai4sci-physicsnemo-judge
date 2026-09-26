@@ -2,9 +2,9 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
-from .store import BusyError
+from .store import BusyError, NicknameConflict, NicknameRequired
 from .contracts import CONTRACT_VERSION
 
 ASSETS = Path(__file__).parent / "static"
@@ -43,7 +43,7 @@ def create_server(store, port=8090, *, display_only=False):
             header = self.headers.get("Authorization", "")
             person = store.authenticate(header[7:]) if header.startswith("Bearer ") else None
             if person is None:
-                self.send(401, {"error": "Enter the participant access code issued by the instructor."})
+                self.send(401, {"error": "Workspace authentication failed. Ask the instructor to check its personal judge credential."})
             return person
 
         def do_GET(self):
@@ -53,12 +53,21 @@ def create_server(store, port=8090, *, display_only=False):
             if display_only and path == "/":
                 self.send(200, (ASSETS / "display.html").read_bytes(), "text/html")
             elif path in {"/", "/display", "/display/", "/app.js", "/style.css"}:
-                filename, mime = {"/": ("index.html", "text/html"), "/display": ("display.html", "text/html"),
+                filename, mime = {"/": ("display.html", "text/html"), "/display": ("display.html", "text/html"),
                                   "/display/": ("display.html", "text/html"), "/app.js": ("app.js", "text/javascript"),
                                   "/style.css": ("style.css", "text/css")}[path]
                 self.send(200, (ASSETS / filename).read_bytes(), mime)
             elif path == "/api/board":
-                self.send(200, store.board())
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                if not query:
+                    self.send(200, store.board())
+                elif set(query) != {"challenge"} or len(query["challenge"]) != 1:
+                    self.send(400, {"error": "Choose exactly one Challenge."})
+                else:
+                    try:
+                        self.send(200, store.board(challenge=query["challenge"][0]))
+                    except ValueError:
+                        self.send(400, {"error": "Choose Challenge 1, 2, 3 or 4."})
             elif path == "/api/me" and not display_only:
                 person = self.participant()
                 if person:
@@ -73,7 +82,7 @@ def create_server(store, port=8090, *, display_only=False):
             if display_only:
                 self.send(403, {"error": "Read-only projector listener. Use the student submission service."})
                 return
-            if self.path != "/api/submissions":
+            if self.path not in {"/api/submissions", "/api/me/nickname"}:
                 self.send(404, {"error": "Not found"})
                 return
             person = self.participant()
@@ -87,10 +96,20 @@ def create_server(store, port=8090, *, display_only=False):
                 if not 0 < length <= 1024 * 1024:
                     raise ValueError("Submission body must be between 1 byte and 1 MiB.")
                 payload = json.loads(self.rfile.read(length))
+                if self.path == "/api/me/nickname":
+                    if not isinstance(payload, dict) or set(payload) != {"nickname"}:
+                        raise ValueError("Supply a nickname only; the account comes from the workspace credential.")
+                    nickname = store.set_nickname(person["id"], payload["nickname"])
+                    self.send(200, {"nickname": nickname, "submissions": store.history(person["id"])})
+                    return
                 if not isinstance(payload, dict) or set(payload) != {"challenge", "sources"}:
                     raise ValueError("Supply challenge and sources only; identity comes from your access code.")
                 identifier = store.submit(person["id"], payload["challenge"], payload["sources"])
                 self.send(202, {"submission_id": identifier})
+            except NicknameConflict:
+                self.send(409, {"error_code": "nickname_taken", "error": "That nickname is already in use."})
+            except NicknameRequired:
+                self.send(409, {"error_code": "nickname_required", "error": "Register your nickname before submitting."})
             except BusyError as exc:
                 self.send(429, {"error": str(exc)})
             except (ValueError, TypeError, RecursionError) as exc:
