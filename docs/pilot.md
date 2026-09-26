@@ -122,6 +122,15 @@ before sending code. A new course cannot silently use an older PDE-only judge.
 Keep the original argument names and order. Numerical defaults from uploaded
 code are not evaluated; the trusted lesson supplies its own defaults.
 
+For condition, wave-speed and analytic-solution comparisons, written decimal
+coefficients are interpreted exactly before arithmetic on both sides. For example,
+`(x-.3)**2` and `x**2-.6*x+.09` receive the same credit. Extra nonzero terms do
+not disappear just because they are smaller than floating-point precision.
+Numeric literal length and exponent limits prevent oversized rational allocation.
+The existing numeric checks for geometry and physical parameters are unchanged.
+Reciprocal denominators also count toward symbolic expansion limits; expressions
+that exceed the conservative budget are rejected before expansion.
+
 Imports, loops, branches, helper-function calls, decorators, file/network access,
 arbitrary attributes and higher derivatives are not supported. Reference
 function calls are not available in the interpreter. Uploads are limited to
