@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import secrets
 import sqlite3
 import time
@@ -33,6 +34,13 @@ def clean_nickname(value):
     if not 1 <= len(name) <= 40:
         raise ValueError("Use a nickname with 1 to 40 visible characters.")
     return name
+
+
+def require_workspace_key(value):
+    # Keep the trusted org/instance identifier exact; never fold or trim identities.
+    if not isinstance(value, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}", value) is None:
+        raise ValueError("Use a stable workspace key of 1 to 256 ASCII identifier characters.")
+    return value
 
 
 def require_available_nickname(db, nickname, participant=None):
@@ -103,6 +111,9 @@ class Store:
             db.executescript("""
                 CREATE TABLE settings (value TEXT NOT NULL, fingerprint TEXT NOT NULL);
                 CREATE TABLE participants (id TEXT PRIMARY KEY, nickname TEXT UNIQUE, token_hash TEXT UNIQUE NOT NULL);
+                CREATE TABLE workspace_participants (
+                    workspace_key TEXT PRIMARY KEY,
+                    participant TEXT UNIQUE NOT NULL REFERENCES participants(id));
                 CREATE TABLE submissions (
                     id TEXT PRIMARY KEY, participant TEXT NOT NULL, challenge TEXT NOT NULL,
                     source_hash TEXT NOT NULL, sources TEXT NOT NULL, status TEXT NOT NULL,
@@ -136,6 +147,53 @@ class Store:
             db.execute("INSERT INTO participants VALUES (?, ?, ?)",
                        (uuid.uuid4().hex, nickname, hashlib.sha256(token.encode()).hexdigest()))
         return token
+
+    def provision_workspace(self, workspace_key, token):
+        """Bind a trusted workspace to one account, without anonymous enrollment.
+
+        This is a local operator API, not an HTTP registration endpoint. The
+        operator must verify workspace ownership and retain its randomly
+        generated 256-bit credential privately before calling. Retrying the
+        same binding is safe after SSH/config-delivery failures. Neither an
+        existing token nor an existing binding can be adopted or rotated here.
+        """
+        workspace_key = require_workspace_key(workspace_key)
+        if not isinstance(token, str) or re.fullmatch(r"[A-Za-z0-9_-]{43,200}", token) is None:
+            raise ValueError("Use a private URL-safe workspace credential containing at least 256 random bits.")
+        self.require_current_version()
+        digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_participants'").fetchone():
+                raise ValueError("This state predates workspace provisioning. Initialize a new state; do not migrate a frozen event.")
+            binding = db.execute(
+                "SELECT p.id,p.nickname,p.token_hash FROM workspace_participants w "
+                "JOIN participants p ON p.id=w.participant WHERE w.workspace_key=?",
+                (workspace_key,),
+            ).fetchone()
+            if binding:
+                if not secrets.compare_digest(binding["token_hash"], digest):
+                    raise ValueError("Workspace is already bound to another credential; automatic rotation is not allowed.")
+                return {"id": binding["id"], "nickname": binding["nickname"]}
+            if db.execute("SELECT 1 FROM participants WHERE token_hash=?", (digest,)).fetchone():
+                raise ValueError("Credential is already assigned to another account; do not reuse workspace credentials.")
+            identifier = uuid.uuid4().hex
+            db.execute("INSERT INTO participants VALUES (?, NULL, ?)", (identifier, digest))
+            db.execute("INSERT INTO workspace_participants VALUES (?, ?)", (workspace_key, identifier))
+        return {"id": identifier, "nickname": None}
+
+    def workspace_account(self, workspace_key):
+        """Read operator-only binding metadata; never expose the credential/hash."""
+        workspace_key = require_workspace_key(workspace_key)
+        with self.connect() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='workspace_participants'").fetchone():
+                return None
+            row = db.execute(
+                "SELECT p.id,p.nickname FROM workspace_participants w "
+                "JOIN participants p ON p.id=w.participant WHERE w.workspace_key=?",
+                (workspace_key,),
+            ).fetchone()
+        return dict(row) if row else None
 
     def set_nickname(self, participant, nickname):
         nickname = clean_nickname(nickname)

@@ -1,0 +1,27 @@
+[Unit]
+Description=AI4Science event workspace enrollment and private judge transport
+Wants=network-online.target ai4sci-judge-api.service
+After=network-online.target ai4sci-judge-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/srv/ai4sci-judge/current
+ExecStart=/srv/ai4sci-judge/venv/bin/python -m ai4sci_judge.enrollment --config /var/lib/ai4sci-enrollment/config.json
+Restart=on-failure
+RestartSec=5
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ai4sci-enrollment /var/lib/ai4sci-judge
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_CHOWN CAP_DAC_OVERRIDE
+MemoryMax=1G
+TasksMax=512
+LimitNOFILE=2048
+
+[Install]
+WantedBy=multi-user.target
