@@ -1,0 +1,25 @@
+[Unit]
+Description=AI4Science consistent private SQLite backup (not disaster recovery)
+
+[Service]
+Type=oneshot
+User=ai4sci-judge
+Group=ai4sci-judge
+WorkingDirectory=/srv/ai4sci-judge/current
+ExecStart=/srv/ai4sci-judge/venv/bin/python -m judge_admin --config /etc/ai4sci-judge-admin/config.json backup
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ai4sci-judge /var/lib/ai4sci-judge-admin
+RestrictAddressFamilies=AF_UNIX
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+TimeoutStartSec=300
+MemoryMax=2G
+TasksMax=64
+LimitNOFILE=512

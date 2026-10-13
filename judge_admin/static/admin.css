@@ -1,0 +1,112 @@
+:root { color-scheme: light; --ink: #171717; --muted: #626262; --line: #dedede; --green: #76b900; --green-ink: #376100; --warn: #914014; --danger: #a62923; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; border-top: 5px solid var(--green); color: var(--ink); background: #fff; font: 16px/1.5 "NVIDIA Sans", "Apple SD Gothic Neo", "Malgun Gothic", Arial, sans-serif; font-synthesis: none; }
+body[data-mode=demo] { border-top-color: #c98b19; }
+main { max-width: 1440px; margin: auto; padding: 0 40px 48px; }
+h1, h2, h3, p, dl { margin: 0; }
+h1 { font-size: 30px; line-height: 1.2; letter-spacing: -.025em; }
+h2 { font-size: 21px; line-height: 1.35; }
+h3 { font-size: 17px; }
+button, input, .button { font: inherit; }
+button, .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 16px; border: 1px solid #aaa; border-radius: 2px; color: var(--ink); background: #fff; font-size: 14px; font-weight: 500; text-decoration: none; cursor: pointer; }
+button:hover, .button:hover { border-color: var(--ink); background: #f5f5f5; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+button:focus-visible, a:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 3px solid var(--green-ink); outline-offset: 3px; }
+button.primary { background: #171717; border-color: #171717; color: #fff; }
+button.danger { border-color: var(--danger); color: var(--danger); }
+input { display: block; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #999; border-radius: 2px; background: #fff; color: var(--ink); }
+label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; }
+a { color: var(--green-ink); text-underline-offset: 3px; }
+code { overflow-wrap: anywhere; font-size: 13px; }
+.masthead { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.nvidia-logo { display: block; width: 180px; height: auto; flex: 0 0 180px; }
+.brand > div { border-left: 1px solid var(--line); padding-left: 24px; }
+.brand strong { display: block; font-size: 19px; }
+.brand span { display: block; font-size: 14px; color: var(--muted); margin-top: 3px; }
+.header-tools, .view-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.mode-badge { display: inline-block; font-size: 13px; font-weight: 700; color: var(--muted); }
+body[data-mode=live] .mode-badge { color: var(--green-ink); }
+body[data-mode=demo] .mode-badge { color: var(--warn); }
+.login-panel { max-width: 430px; margin: 76px auto 24px; }
+.eyebrow { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.login-panel > p:not(.eyebrow) { margin-top: 16px; color: var(--muted); }
+.login-panel form { margin-top: 28px; }
+.login-panel form button { width: 100%; margin-top: 16px; }
+#message:not(:empty), #error:not([hidden]) { margin-top: 20px; padding: 12px 16px; border-left: 3px solid var(--green); background: #f3f8e9; font-size: 14px; overflow-wrap: anywhere; }
+#error:not([hidden]) { color: #84231d; border-color: var(--danger); background: #fff2ef; }
+.mode-nav { display: flex; gap: 26px; margin: 24px 0 18px; border-bottom: 1px solid var(--line); }
+.mode-nav a { text-decoration: none; padding-bottom: 12px; color: var(--muted); font-size: 15px; }
+.mode-nav a[aria-current=page] { color: var(--ink); border-bottom: 3px solid var(--green); font-weight: 700; }
+body[data-mode=demo] .mode-nav a[aria-current=page] { border-bottom-color: #c98b19; }
+.mode-banner { border-left: 4px solid var(--green); background: #f3f8e9; padding: 14px 18px; margin-bottom: 26px; }
+.mode-banner strong { font-size: 17px; }
+.mode-banner p { margin-top: 4px; font-size: 14px; }
+body[data-mode=demo] .mode-banner { border-color: #c98b19; background: #fff6e5; }
+.section-heading, .panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+.state-label { margin-top: 8px; color: var(--muted); font-size: 13px; }
+.state-label code { display: inline-block; max-width: 100%; }
+.muted { color: var(--muted); font-size: 13px; }
+#status-updated { margin: 12px 0 20px; }
+.metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 20px 0; gap: 20px; }
+.metrics > div { min-width: 0; padding-right: 16px; }
+.metrics > div + div { border-left: 1px solid var(--line); padding-left: 20px; }
+.metrics dt { font-size: 14px; color: var(--muted); }
+.metrics dd { margin: 4px 0 0; font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metrics span { font-size: 12px; color: var(--muted); }
+.panel { padding: 26px 0; border-bottom: 1px solid var(--line); }
+.panel-heading p, .reset-options p { margin-top: 7px; color: var(--muted); font-size: 14px; }
+.note { margin-top: 14px; color: var(--muted); font-size: 13px; }
+.challenge-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+.challenge-control { min-width: 0; border: 1px solid var(--line); border-top: 3px solid var(--green); padding: 18px; }
+.challenge-control-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.challenge-state { color: var(--green-ink); font-size: 13px; font-weight: 700; }
+.challenge-control[data-state=closing] { border-top-color: #c98b19; }
+.challenge-control[data-state=closing] .challenge-state { color: var(--warn); }
+.challenge-control[data-state=closed], .challenge-control[data-state=finalized] { border-top-color: var(--ink); }
+.challenge-control[data-state=closed] .challenge-state, .challenge-control[data-state=finalized] .challenge-state { color: var(--ink); }
+.challenge-control[data-state=unknown] { border-top-color: #aaa; }
+.challenge-control[data-state=unknown] .challenge-state { color: var(--muted); }
+.challenge-timing { margin-top: 12px; font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.challenge-counts { margin-top: 6px; font-size: 14px; }
+.challenge-detail { min-height: 40px; margin-top: 8px; color: var(--muted); font-size: 13px; }
+.challenge-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.challenge-actions button { padding: 8px 12px; }
+#finalize-intro { margin-top: 14px; line-height: 1.7; }
+#finalize-error { color: var(--danger); font-size: 14px; margin-top: 12px; }
+.password-field { margin-top: 20px; }
+.password-field .note { margin-top: 8px; }
+#password-intro { margin-top: 14px; color: var(--muted); font-size: 14px; }
+#password-error { color: var(--danger); font-size: 14px; margin-top: 16px; }
+input[aria-invalid=true] { border-color: var(--danger); }
+.empty { color: var(--muted); font-size: 14px; padding: 20px 0; }
+.table-scroll { width: 100%; overflow-x: auto; margin-top: 18px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+th { background: #f5f5f5; color: var(--muted); font-weight: 500; }
+th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child { max-width: 360px; overflow-wrap: anywhere; }
+td small { display: block; color: var(--muted); margin-top: 3px; }
+td .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+td .button, td button { min-height: 38px; font-size: 13px; padding: 7px 12px; }
+.requirement { margin-top: 10px; font-size: 14px; color: var(--warn); }
+.reset-options { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 22px; }
+.reset-options > div + div { border-left: 1px solid var(--line); padding-left: 30px; }
+.reset-options p { max-width: 500px; }
+.reset-options button { margin-top: 18px; }
+.audit { margin: 12px 0 0; padding: 0; list-style: none; }
+.audit li { display: flex; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 14px; overflow-wrap: anywhere; }
+.audit time { color: var(--muted); font-size: 12px; flex-shrink: 0; }
+dialog { width: min(580px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 28px; border: 1px solid #aaa; border-radius: 3px; color: var(--ink); background: #fff; }
+dialog::backdrop { background: rgb(0 0 0 / 45%); }
+dialog h2 { margin-top: 10px; }
+#confirm-intro { margin-top: 12px; font-size: 14px; }
+#confirm-scope { padding-left: 21px; font-size: 14px; }
+#confirm-scope li { margin-top: 8px; overflow-wrap: anywhere; }
+.backup-assurance { padding: 10px 12px; background: #f3f8e9; font-size: 13px; margin-bottom: 20px; }
+#confirm-phrase { display: block; font-size: 17px; margin-bottom: 10px; }
+#confirm-error { color: var(--danger); font-size: 14px; margin-top: 12px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+@media (max-width: 900px) { main { padding-right: 24px; padding-left: 24px; } .brand { gap: 10px; } .brand > div { padding-left: 16px; } .brand strong { font-size: 16px; } .metrics { gap: 10px; } .metrics > div + div { padding-left: 12px; } }
+@media (max-width: 640px) { .challenge-controls { grid-template-columns: 1fr; } .challenge-timing { font-size: 19px; } }
+@media (max-width: 640px) { main { padding: 0 16px 32px; } .masthead { flex-wrap: wrap; gap: 0; padding-bottom: 14px; } .brand { gap: 0; width: 100%; } .nvidia-logo { width: 148px; flex-basis: 148px; } .brand > div { padding-left: 10px; } .brand strong { font-size: 14px; } .header-tools { width: 100%; justify-content: space-between; } .login-panel { margin-top: 36px; } .mode-nav { gap: 18px; } .mode-nav a { font-size: 14px; } .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; } .metrics > div, .metrics > div + div { padding: 0; border: 0; } .metrics dd { font-size: 27px; } .reset-options { grid-template-columns: 1fr; gap: 24px; } .reset-options > div + div { border: 0; padding-left: 0; } .view-actions { width: 100%; } .view-actions .button { flex: 1; } table { min-width: 640px; } .audit li { flex-direction: column; gap: 3px; } dialog { padding: 22px; } }

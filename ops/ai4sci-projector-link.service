@@ -1,0 +1,39 @@
+[Unit]
+Description=AI4Science read-only Brev Secure Link adapter
+After=network.target ai4sci-judge-display.service
+
+[Service]
+Type=simple
+DynamicUser=yes
+Environment=PROJECTOR_BIND_ADDRESS=127.0.0.1
+Environment=PROJECTOR_ALLOWED_PEERS=127.0.0.1
+EnvironmentFile=/etc/ai4sci-projector-link.env
+ExecStart=/usr/bin/python3 -I -B /usr/local/lib/ai4sci-projector-link/projector_proxy.py --hostname ${PROJECTOR_HOSTNAME} --bind-address ${PROJECTOR_BIND_ADDRESS} --allowed-peers ${PROJECTOR_ALLOWED_PEERS}
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+IPAddressDeny=any
+IPAddressAllow=localhost
+InaccessiblePaths=-/srv/ai4sci-judge -/var/lib/ai4sci-judge -/var/lib/ai4sci-judge-admin -/var/lib/ai4sci-enrollment -/etc/ai4sci-judge-admin -/var/backups -/etc/ssh -/run/credentials
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=128
+
+[Install]
+WantedBy=multi-user.target

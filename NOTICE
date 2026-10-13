@@ -1,0 +1,27 @@
+AI4Science PhysicsNeMo Judge
+
+Extracted from the locally developed judge in
+https://github.com/yang926/AI4Sci-PhysicsNeMo-Bootcamp
+on 2026-09-23. The course uses the Apache License, Version 2.0.
+
+This repository changes package names, separates the pinned course dependency,
+and adds a read-only projector listener. The course implementation is retained
+as a separately versioned submodule; its notices remain with that source.
+
+NVIDIA, PhysicsNeMo and Brev are names of their respective owners. This pilot
+does not claim to be an official NVIDIA scoring product or approved event rubric.
+
+NVIDIA Sans font software
+Copyright 2022 NVIDIA Corporation. Modification of this file requires prior
+written permission from NVIDIA Corporation.
+
+The three base64 WOFF2 payloads in static/display.html (brand-fonts) are unchanged
+NVIDIA Sans Regular, Medium and Bold, Version 3.000. They are proprietary font
+software and are NOT licensed under this repository's Apache-2.0 license.
+Their use is governed separately by the NVIDIA Font Software End User License
+Agreement (June 2, 2022):
+https://raytracing-docs.nvidia.com/optix9/ext/fonts/nvidia-sans/NVIDIA_Sans_EULA_20220602_FINAL.pdf
+
+They are included for this NVIDIA PhysicsNeMo tutorial's scoreboard, not as a
+general-purpose font distribution. NVIDIA retains ownership of the font and
+associated trademarks. See docs/branding.md for original URLs and SHA256 hashes.

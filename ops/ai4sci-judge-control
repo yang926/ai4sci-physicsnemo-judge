@@ -1,0 +1,141 @@
+#!/usr/bin/python3 -I
+"""Root-owned fixed service gate. Never imports judge code or reads SQLite.
+
+Install root:root 0755 at /usr/local/sbin/ai4sci-judge-control. The backend
+checks zero queued/running jobs before quiesce; this gate additionally checks
+that intake is stopped. Never execute a writable checkout as root.
+"""
+import contextlib
+import fcntl
+import json
+import os
+import stat
+import subprocess
+import sys
+import time
+
+INTAKE = ("ai4sci-judge-api.service", "ai4sci-enrollment.service")
+WORKERS = tuple("ai4sci-judge-worker@%d.service" % index for index in range(8))
+UNITS = INTAKE + WORKERS
+VERBS = frozenset(("status", "pause", "quiesce", "resume"))
+SYSTEMCTL = "/usr/bin/systemctl"
+LOCK = "/run/lock/ai4sci-judge-admin-control.lock"
+ENV = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C", "LC_ALL": "C",
+       "SYSTEMD_COLORS": "0", "SYSTEMD_PAGER": "cat"}
+
+
+class ControlError(Exception):
+    """A failed transition; callers must not assume maintenance."""
+
+
+def invoke(arguments, timeout=120):
+    """Arguments are constructed only here, never supplied by the caller."""
+    try:
+        result = subprocess.run(
+            [SYSTEMCTL, "--no-ask-password", "--no-pager", *arguments],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, env=ENV, cwd="/", timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ControlError("service command failed or timed out; inspect status") from exc
+    # Fixed properties/units bound normal output. Never expose journals,
+    # environment variables, or arbitrary command diagnostics to HTTP.
+    if result.returncode or len(result.stdout) > 16384:
+        raise ControlError("service command failed; inspect status")
+    return result.stdout.decode("utf-8", errors="strict")
+
+
+def status():
+    output = invoke([
+        "show", "--property=Id,LoadState,ActiveState,SubState", *UNITS,
+    ], timeout=15)
+    services = {}
+    for block in output.strip().split("\n\n"):
+        fields = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
+        unit = fields.get("Id")
+        if unit not in UNITS or unit in services or fields.get("LoadState") != "loaded":
+            raise ControlError("expected service is missing or ambiguous")
+        if not fields.get("ActiveState") or not fields.get("SubState"):
+            raise ControlError("incomplete service status")
+        services[unit] = {"active_state": fields["ActiveState"], "sub_state": fields["SubState"]}
+    if set(services) != set(UNITS):
+        raise ControlError("expected service status is missing")
+
+    def stopped(unit):
+        return services[unit] == {"active_state": "inactive", "sub_state": "dead"}
+
+    return {"intake_paused": all(stopped(unit) for unit in INTAKE),
+            "workers_stopped": all(stopped(unit) for unit in WORKERS),
+            "services": services}
+
+
+def operate(verb):
+    if verb not in VERBS:
+        raise ControlError("invalid operation")
+    if verb == "status":
+        return status()
+    if verb == "pause":
+        # Existing After=API ordering stops enrollment before API. Workers
+        # continue draining; the display is never included in control units.
+        invoke(["stop", *INTAKE])
+    elif verb == "quiesce":
+        if not status()["intake_paused"]:
+            raise ControlError("pause intake and drain jobs before quiesce")
+        invoke(["stop", *WORKERS])
+    else:
+        # systemd enforces enrollment's existing After=API ordering.
+        # Starting already active units is idempotent, not a restart.
+        invoke(["start", *WORKERS, *INTAKE])
+    result = status()
+    if verb == "pause" and not result["intake_paused"]:
+        raise ControlError("intake did not stop")
+    if verb == "quiesce" and not (result["intake_paused"] and result["workers_stopped"]):
+        raise ControlError("workers did not stop or intake resumed")
+    if verb == "resume" and any(value != {"active_state": "active", "sub_state": "running"}
+                                for value in result["services"].values()):
+        raise ControlError("not all services resumed")
+    return result
+
+
+@contextlib.contextmanager
+def locked():
+    fd = os.open(LOCK, os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+            raise ControlError("unsafe service-control lock")
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise ControlError("another service transition is in progress")
+                time.sleep(0.1)
+        yield
+    finally:
+        os.close(fd)
+
+
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else argv
+    try:
+        if len(args) != 1 or args[0] not in VERBS:
+            raise ControlError("expected exactly one verb: status, pause, quiesce, resume")
+        if os.geteuid() != 0:
+            raise ControlError("service control requires the fixed sudo rule")
+        # Installed shebang -I ignores PYTHONPATH/user site and omits the
+        # script directory from imports; no package under /srv is trusted.
+        with locked():
+            result = operate(args[0])
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        return 0
+    except (ControlError, OSError, ValueError) as exc:
+        print(json.dumps({"error": str(exc)}, sort_keys=True), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

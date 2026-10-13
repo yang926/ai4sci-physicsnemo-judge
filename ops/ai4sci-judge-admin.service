@@ -1,0 +1,31 @@
+[Unit]
+Description=AI4Science authenticated private administrator and isolated demo
+After=network.target
+
+[Service]
+Type=simple
+User=ai4sci-judge
+Group=ai4sci-judge
+WorkingDirectory=/srv/ai4sci-judge/current
+ExecStart=/srv/ai4sci-judge/venv/bin/python -m judge_admin --config /etc/ai4sci-judge-admin/config.json serve
+LoadCredential=admin-password:/etc/ai4sci-judge-admin/admin-password
+Restart=on-failure
+RestartSec=3
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ai4sci-judge /var/lib/ai4sci-judge-admin /run/lock -/run/sudo
+ProtectControlGroups=true
+# No NoNewPrivileges or options which implicitly enable it (including
+# RestrictAddressFamilies and ProtectKernelTunables/Modules on systemd249).
+# The sole sudo capability is the root-owned fixed service gate. Verify the
+# running process has NoNewPrivs:0; never grant generic sudo/systemctl.
+MemoryMax=2G
+TasksMax=128
+LimitNOFILE=2048
+
+[Install]
+WantedBy=multi-user.target

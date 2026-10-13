@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly private judge database backup
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+Unit=ai4sci-judge-backup.service
+
+[Install]
+WantedBy=timers.target
